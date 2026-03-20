@@ -1,0 +1,8 @@
+{
+  "bot_id": "YOUR_BOT_ID",
+  "secret": "YOUR_SECRET",
+  "websocket_url": "wss://openws.work.weixin.qq.com",
+  "heartbeat_interval": 30,
+  "reconnect_delay": 5,
+  "max_reconnect_attempts": 10
+}

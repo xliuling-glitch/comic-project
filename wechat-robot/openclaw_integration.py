@@ -10,11 +10,22 @@ import json
 import uuid
 import os
 import sys
+import logging
+import dashscope
+from dashscope import Generation
+
+# 配置日志
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger('OpenClawWeCom')
 
 # 添加父目录到路径，以便导入 wecom_bot
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from wecom_bot import WeComBot
+
+# 配置通义千问
+dashscope.api_key = os.environ.get('DASHSCOPE_API_KEY', 'sk-7f7f842149384a0eb6d5b5b83bb682e0')
+QWEN_MODEL = 'qwen-plus'  # 可选：qwen-turbo, qwen-plus, qwen-max
 
 
 class OpenClawWeComIntegration:
@@ -70,82 +81,118 @@ class OpenClawWeComIntegration:
     async def _process_text_message(self, req_id: str, content: str, 
                                      from_userid: str, chat_type: str):
         """
-        处理文本消息
-        
-        这里可以集成 OpenClaw 或任何 LLM API
+        处理文本消息 - 使用 Qwen 流式输出
         """
-        # TODO: 在这里调用 OpenClaw / LLM 处理消息
-        # 示例：简单的 AI 回复逻辑
-        
         stream_id = str(uuid.uuid4())
         
-        # 模拟思考中
-        await self.bot.respond_msg(req_id, {
-            "msgtype": "stream",
-            "stream": {
-                "id": stream_id,
-                "finish": False,
-                "content": "🤔 正在思考..."
-            }
-        })
-        
-        # 模拟 AI 回复 - 实际使用时替换为真实的 LLM 调用
-        response = await self._call_ai(content, from_userid, chat_type)
-        
-        # 流式发送回复
-        chunks = self._split_response(response)
-        for i, chunk in enumerate(chunks):
-            is_last = (i == len(chunks) - 1)
+        try:
+            # 使用 Qwen 流式调用
+            messages = [
+                {'role': 'system', 'content': '你是一个友好的智能助手，回答简洁、有用、有趣。支持 Markdown 格式。'},
+                {'role': 'user', 'content': content}
+            ]
+            
+            # 第一次回复：思考中
             await self.bot.respond_msg(req_id, {
                 "msgtype": "stream",
                 "stream": {
                     "id": stream_id,
-                    "finish": is_last,
-                    "content": chunk
+                    "finish": False,
+                    "content": "🤔 正在思考..."
                 }
             })
-            if not is_last:
-                await asyncio.sleep(0.1)  # 模拟打字机延迟
+            
+            # 流式调用 Qwen（同步方式，在 executor 中运行）
+            loop = asyncio.get_event_loop()
+            full_response = await loop.run_in_executor(
+                None,
+                lambda: self._call_qwen_stream(messages)
+            )
+            
+            if full_response:
+                # 分块发送响应
+                chunks = self._split_response(full_response, 50)
+                for i, chunk in enumerate(chunks):
+                    is_last = (i == len(chunks) - 1)
+                    await self.bot.respond_msg(req_id, {
+                        "msgtype": "stream",
+                        "stream": {
+                            "id": stream_id,
+                            "finish": is_last,
+                            "content": chunk
+                        }
+                    })
+                    if not is_last:
+                        await asyncio.sleep(0.05)
+            else:
+                await self.bot.respond_msg(req_id, {
+                    "msgtype": "stream",
+                    "stream": {
+                        "id": stream_id,
+                        "finish": True,
+                        "content": "抱歉，我没有理解您的问题。"
+                    }
+                })
+                
+        except Exception as e:
+            logger.error(f"处理异常：{e}")
+            # 降级为非流式
+            response = await self._call_ai(content, from_userid, chat_type)
+            await self.bot.respond_msg(req_id, {
+                "msgtype": "text",
+                "text": {"content": response}
+            })
+    
+    def _call_qwen_stream(self, messages: list) -> str:
+        """同步调用 Qwen（用于在 executor 中运行）"""
+        try:
+            response = Generation.call(
+                model=QWEN_MODEL,
+                messages=messages,
+                result_format='message'
+            )
+            
+            if response.status_code == 200 and response.output:
+                # output 是 dict 类型，直接获取 text 字段
+                content = response.output.get('text', '')
+                return content if content else "抱歉，我没有理解您的问题。"
+            else:
+                err_code = getattr(response, 'code', 'unknown')
+                err_msg = getattr(response, 'message', 'unknown')
+                logger.error(f"Qwen API 错误：{err_code} - {err_msg}")
+                return f"抱歉，AI 服务暂时不可用。"
+        except Exception as e:
+            logger.error(f"Qwen 调用异常：{e}")
+            return f"抱歉，处理您的消息时遇到了一些问题：{str(e)}"
     
     async def _call_ai(self, content: str, from_userid: str, chat_type: str) -> str:
         """
-        调用 AI 处理消息
+        调用通义千问 (Qwen) 处理消息（备用非流式）
         
-        这里可以集成：
-        - OpenClaw 本地 API
-        - OpenAI / Claude / Qwen 等 LLM
-        - 自定义业务逻辑
+        使用阿里云 DashScope API
         """
-        # 示例：简单的规则回复
-        content_lower = content.lower()
-        
-        if '你好' in content or 'hello' in content:
-            return "您好！我是您的智能助手，有什么可以帮您的吗？😊"
-        
-        elif '时间' in content or '几点' in content:
-            from datetime import datetime
-            now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-            return f"当前时间是：{now}"
-        
-        elif '帮助' in content or 'help' in content:
-            return """**我能帮您做什么？**
-
-- 📝 回答各种问题
-- 📊 查询信息和数据
-- 🔧 执行自动化任务
-- 💬 陪您聊天解闷
-
-直接告诉我您的需求吧！"""
-        
-        else:
-            return f"""收到您的消息了：
-
-> {content}
-
-这是一个示例回复。请集成真实的 LLM API（如 OpenClaw、Qwen、Claude 等）来获取智能回复。
-
-**配置方法：**
-编辑 `openclaw_integration.py` 中的 `_call_ai` 方法，接入您的 AI 服务。"""
+        try:
+            messages = [
+                {'role': 'system', 'content': '你是一个友好的智能助手，回答简洁、有用、有趣。支持 Markdown 格式。'},
+                {'role': 'user', 'content': content}
+            ]
+            
+            response = await asyncio.get_event_loop().run_in_executor(
+                None,
+                lambda: Generation.call(model=QWEN_MODEL, messages=messages, result_format='message')
+            )
+            
+            if response and response.status_code == 200 and response.output:
+                return response.output.get('text', '抱歉，我没有理解您的问题。')
+            else:
+                err_code = getattr(response, 'code', 'unknown')
+                err_msg = getattr(response, 'message', 'unknown')
+                logger.error(f"Qwen API 错误：{err_code} - {err_msg}")
+                return f"抱歉，AI 服务暂时不可用。"
+                
+        except Exception as e:
+            logger.error(f"AI 调用异常：{e}")
+            return f"抱歉，处理您的消息时遇到了一些问题：{str(e)}"
     
     def _split_response(self, text: str, chunk_size: int = 50) -> list:
         """将回复分割成小块，用于流式发送"""

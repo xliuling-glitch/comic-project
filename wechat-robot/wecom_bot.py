@@ -213,25 +213,46 @@ class WeComBot:
         self._event_callback = callback
         logger.info("事件回调已注册")
     
-    async def respond_msg(self, req_id: str, msg_data: Dict[str, Any]) -> bool:
+    async def respond_msg(self, req_id: str, msgtype: str, content: Dict[str, Any]) -> bool:
         """
-        回复消息
+        回复消息 - 按照企业微信官方格式
         
         Args:
             req_id: 消息回调中的 req_id
-            msg_data: 消息内容，包含 msgtype 和对应内容
+            msgtype: 消息类型 (text/image/markdown 等)
+            content: 消息内容 (如 {"content": "文本内容"})
             
         Returns:
             bool: 发送是否成功
         """
+        # 按照官方文档格式构建
         msg = {
             "cmd": "aibot_respond_msg",
             "headers": {
                 "req_id": req_id
             },
-            "body": msg_data
+            "body": {
+                "msgtype": msgtype,
+                msgtype: content
+            }
         }
-        return await self._send_command(msg)
+        logger.info(f"正在发送回复：cmd=aibot_respond_msg, req_id={req_id}, msgtype={msgtype}")
+        logger.info(f"消息内容：{json.dumps(msg, ensure_ascii=False)}")
+        
+        # 发送并等待响应
+        result = await self._send_command_with_response(msg)
+        if result:
+            errcode = result.get('errcode')
+            errmsg = result.get('errmsg')
+            logger.info(f"回复响应：errcode={errcode}, errmsg={errmsg}")
+            if errcode == 0:
+                logger.info("✅ 回复发送成功！")
+                return True
+            else:
+                logger.error(f"❌ 回复发送失败：{errcode} - {errmsg}")
+                return False
+        logger.error("回复发送失败：无响应")
+        return False
     
     async def respond_welcome_msg(self, req_id: str, msg_data: Dict[str, Any]) -> bool:
         """

@@ -1,0 +1,31 @@
+{
+  "download_dir": "downloads",
+  "wechat": {
+    "wechat_path": "C:\\Program Files (x86)\\Tencent\\WeChat\\WeChat.exe"
+  },
+  "xianyu": {
+    "chrome_user_data_dir": "C:\\Users\\Administrator\\AppData\\Local\\Google\\Chrome\\User Data"
+  },
+  "auto_reply": {
+    "custom_rules": [
+      {
+        "keyword": "有没有货",
+        "reply": "您好，有的，直接拍下付款就可以了，自动发货秒发链接😊",
+        "regex": false
+      },
+      {
+        "keyword": "可以便宜吗",
+        "reply": "您好，价格已经很优惠了哦，不议价了呢😊",
+        "regex": false
+      }
+    ]
+  },
+  "ai": {
+    "enabled": false,
+    "model": "gemini",
+    "api_key": "",
+    "optimize_title": true,
+    "optimize_description": true,
+    "generate_main_image": false
+  }
+}

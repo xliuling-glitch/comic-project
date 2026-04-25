@@ -1,0 +1,69 @@
+# 系统文件
+Desktop/
+Documents/
+Music/
+MyDocuments/
+Videos/
+Drive_D/
+Drive_E/
+AppData/
+
+# Node.js
+node_modules/
+package-lock.json
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.venv/
+venv/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# 临时文件
+*.tmp
+*.temp
+*.log
+
+# 大文件
+*.mp4
+*.mov
+*.avi
+*.zip
+*.rar
+*.7z
+
+# OpenClaw内部状态
+.openclaw/
+
+# 嵌套的git仓库（需要的时候单独管理）
+CL4R1T4S/
+Wechatsync/
+agency-agents/
+content-pipeline/
+content-pipeline-output/
+khazix-skills/
+md-formatter/
+video-creator/
+wechatskill/
+
+# 批量文件
+batch_*.json
+import_batch_*.json
+
+# 数据文件
+*.csv
+*.jsonl
+gfs_product_stats.json
+temp_data.csv
+porcellio_white_bg.png
